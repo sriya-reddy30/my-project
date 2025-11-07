@@ -168,15 +168,18 @@
 
 
 import * as sql from "mssql";
-import type { config as SQLConfig, ConnectionPool } from "mssql";
+import type { config as SQLConfig, ConnectionPool, ISqlTypeFactory } from "mssql";
 
+/* ======================================================
+   🔧 Database Configuration
+====================================================== */
 const dbConfig: SQLConfig = {
   user: process.env.DB_USER || "",
   password: process.env.DB_PASSWORD || "",
   server: process.env.DB_SERVER || "",
   database: process.env.DB_NAME || "",
   options: {
-    encrypt: false, // true if using Azure
+    encrypt: false,
     trustServerCertificate: true,
     enableArithAbort: true,
   },
@@ -184,49 +187,79 @@ const dbConfig: SQLConfig = {
 
 let pool: ConnectionPool | null = null;
 
-//  Get or create a shared connection pool
+/* ======================================================
+   ✅ Create or Reuse a Shared MSSQL Connection Pool
+====================================================== */
 export async function getConnection(): Promise<ConnectionPool> {
   try {
     if (pool) return pool;
     pool = await sql.connect(dbConfig);
-    console.log(" Connected to MSSQL database");
+    console.log("✅ Connected to MSSQL database");
     return pool;
-  } catch (err) {
-    console.error(" Database connection failed:", err);
+  } catch (error: unknown) {
+    console.error("❌ Database connection failed:", error);
     pool = null;
-    throw err;
+    throw error;
   }
 }
 
-// Generic query helper
-export async function executeQuery(
+/* ======================================================
+   🧱 Helper: Add SQL Inputs (Overload-Safe)
+====================================================== */
+
+// TypeScript-overload-safe helper
+function addInput(request: sql.Request, name: string, value: unknown, type?: ISqlTypeFactory): void;
+function addInput(request: sql.Request, name: string, value: unknown, type?: ISqlTypeFactory): void {
+  if (type) {
+    // Explicitly cast to overload signature with 3 parameters
+    (request.input as (name: string, type: ISqlTypeFactory, value: unknown) => sql.Request)(
+      name,
+      type,
+      value
+    );
+  } else {
+    // Overload with 2 parameters
+    (request.input as (name: string, value: unknown) => sql.Request)(name, value);
+  }
+}
+
+/* ======================================================
+   ⚙️ Generic Query Helper (Type-safe)
+====================================================== */
+export async function executeQuery<T = unknown>(
   query: string,
-  params?: { name: string; value: any }[]
-) {
+  params?: { name: string; type?: ISqlTypeFactory; value: unknown }[]
+): Promise<T[]> {
   const connection = await getConnection();
   const request = connection.request();
 
-  params?.forEach((p) => request.input(p.name, p.value));
+  params?.forEach((p) => addInput(request, p.name, p.value, p.type));
 
-  const result = await request.query(query);
+  const result = await request.query<T>(query);
   return result.recordset;
 }
 
-/* ===== Transactions Helpers ===== */
+/* ======================================================
+   💰 Transactions and Reports
+====================================================== */
 
-export type TransactionType = {
+export interface TransactionType {
   id: number;
   item: string;
   amount: number;
   transactionDate: string;
-};
+}
 
-//  Get all transactions sorted by date
+/* 🔹 Get all transactions */
 export async function getTransactions(): Promise<TransactionType[]> {
-  const result = await executeQuery(
-    "SELECT * FROM Transactions ORDER BY TransactionDate DESC"
-  );
-  return result.map((t: any) => ({
+  const result = await executeQuery<{
+    Id: number;
+    Item: string;
+    Amount: number;
+    TransactionDate: Date;
+  }>("SELECT * FROM Transactions ORDER BY TransactionDate DESC");
+
+  return result.map((t) => ({
     id: t.Id,
     item: t.Item,
     amount: t.Amount,
@@ -234,30 +267,50 @@ export async function getTransactions(): Promise<TransactionType[]> {
   }));
 }
 
-//  Insert a new transaction
-export async function addTransaction(item: string, amount: number) {
+/* 🔹 Add a new transaction */
+export async function addTransaction(item: string, amount: number): Promise<void> {
   const query = `
     INSERT INTO Transactions (Item, Amount, TransactionDate)
     VALUES (@item, @amount, GETDATE())
   `;
   await executeQuery(query, [
-    { name: "item", value: item },
-    { name: "amount", value: amount },
+    { name: "item", type: sql.VarChar(255), value: item },
+    { name: "amount", type: sql.Decimal(10, 2), value: amount },
   ]);
 }
 
-//  Today's transactions
-export async function getDailyReports() {
-  return await executeQuery(`
+/* 🔹 Get today's transactions (Daily Reports) */
+export async function getDailyReports(): Promise<TransactionType[]> {
+  const result = await executeQuery<{
+    Id: number;
+    Item: string;
+    Amount: number;
+    TransactionDate: Date;
+  }>(`
     SELECT * 
     FROM Transactions
     WHERE CAST(TransactionDate AS DATE) = CAST(GETDATE() AS DATE)
   `);
+
+  return result.map((t) => ({
+    id: t.Id,
+    item: t.Item,
+    amount: t.Amount,
+    transactionDate: new Date(t.TransactionDate).toISOString(),
+  }));
 }
 
-//  Monthly summary
-export async function getMonthlySummary() {
-  return await executeQuery(`
+/* 🔹 Get monthly summary */
+export interface MonthlySummary {
+  Month: number;
+  Total: number;
+}
+
+export async function getMonthlySummary(): Promise<MonthlySummary[]> {
+  const result = await executeQuery<{
+    Month: number;
+    Total: number;
+  }>(`
     SELECT 
       MONTH(TransactionDate) AS Month,
       SUM(Amount) AS Total
@@ -265,6 +318,14 @@ export async function getMonthlySummary() {
     GROUP BY MONTH(TransactionDate)
     ORDER BY Month
   `);
+
+  return result.map((row) => ({
+    Month: row.Month,
+    Total: row.Total,
+  }));
 }
 
+/* ======================================================
+   📦 Export SQL for other modules
+====================================================== */
 export { sql };
