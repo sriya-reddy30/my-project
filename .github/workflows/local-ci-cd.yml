@@ -4,11 +4,17 @@ on:
   push:
     branches: ["main"]
   workflow_dispatch:
+  schedule:
+    # Runs every night at 2 AM UTC (optional — remove this block if you don't want scheduling)
+    - cron: "0 2 * * *"
 
 jobs:
   build-and-test-deploy:
     name: Build → Test → Simulated Deploy
     runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: ./my-app  # 👈 all commands now run inside the my-app folder
 
     steps:
       - name: 🛒 Checkout repository
@@ -19,6 +25,7 @@ jobs:
         with:
           node-version: 20
           cache: 'npm'
+          cache-dependency-path: my-app/package-lock.json  # ensures correct npm cache path
 
       - name: 📦 Install dependencies
         run: npm ci
@@ -47,13 +54,13 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: next-build
-          path: next-build.tar.gz
+          path: my-app/next-build.tar.gz
 
       - name: 📦 Simulate "Deploy" locally
         run: |
-          mkdir -p deploy_output
-          cp next-build.tar.gz deploy_output/
-          cd deploy_output
+          mkdir -p ../deploy_output
+          cp next-build.tar.gz ../deploy_output/
+          cd ../deploy_output
           tar -xzf next-build.tar.gz
           echo "✅ Simulated deployment complete:"
           ls -la .next
@@ -61,4 +68,4 @@ jobs:
       - name: ✅ Verify simulated deployment
         run: |
           echo "🎯 App successfully 'deployed' to local 'deploy_output' folder!"
-          ls -la deploy_output/.next
+          ls -la ../deploy_output/.next
