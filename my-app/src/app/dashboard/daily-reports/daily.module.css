@@ -1,0 +1,30 @@
+.container {
+  display: flex;
+  min-height: 100vh;
+  background-color: #f9f9f9;
+  font-family: Arial, sans-serif;
+}
+
+.main {
+  flex: 1;
+  padding: 1rem;
+  color: #000;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+  color: #000; /* makes all table text black */
+}
+
+.table th,
+.table td {
+  border: 1px solid #ddd;
+  padding: 8px;
+  color: #000; /* ensures header and cell text are black */
+}
+
+.table th {
+  background-color: #f4f4f4;
+  text-align: left;
+}

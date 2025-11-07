@@ -1,0 +1,87 @@
+.container {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 100vh;
+  background: url("/backdrop.png") no-repeat center center/cover;
+  font-family: Arial, sans-serif;
+}
+
+.form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+  padding: 40px;
+  border-radius: 15px;
+  width: 100%;
+  max-width: 350px;
+
+  /* Glassmorphism effect */
+  background: rgba(255, 255, 255, 0.15);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  border: 1px solid rgba(255, 255, 255, 0.3);
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.2);
+}
+
+.title {
+  font-size: 28px;
+  font-weight: 700;
+  text-align: center;
+  margin-bottom: 10px;
+
+  /* Gradient background */
+  background: linear-gradient(135deg, #0070f3 0%, #00c6ff 100%);
+  color: #ffffff; /* fallback if gradient clip not supported */
+}
+
+/* Enable gradient text where supported */
+@supports (background-clip: text) or (-webkit-background-clip: text) {
+  .title {
+    background-clip: text;
+    -webkit-background-clip: text; /* Chrome/Safari */
+    -webkit-text-fill-color: transparent; /* Chrome/Safari */
+    color: transparent; /* Firefox */
+  }
+}
+
+.form input {
+  padding: 12px;
+  border: none;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.8);
+  outline: none;
+  color: #111111;
+}
+
+.form button {
+  padding: 12px;
+  background: linear-gradient(135deg, #181818, #00c6ff);
+  color: white;
+  border: none;
+  border-radius: 8px;
+  cursor: pointer;
+  font-weight: bold;
+  transition: transform 0.2s ease, background 0.3s ease;
+}
+
+
+
+.error {
+  color: red;
+  font-weight: bold;
+  text-align: center;
+}
+
+.signupText {
+  text-align: center;
+  margin-top: 10px;
+  color: #ffffff;
+}
+
+.link {
+  color: #111111;
+  cursor: pointer;
+  text-decoration: underline;
+  font-weight: 500;
+}
