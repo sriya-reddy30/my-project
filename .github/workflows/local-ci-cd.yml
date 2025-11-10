@@ -1,4 +1,4 @@
-name: Deploy Next.js App to Windows Server
+name: Deploy Next.js App to Windows Server (Windows Runner)
 
 on:
   push:
@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
 
 env:
-  DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || 'C:/deploy/sample' }}
+  DEPLOY_PATH: "C:/deploy/sample"
 
 jobs:
   build_and_deploy:
-    runs-on: ubuntu-latest
+    runs-on: windows-latest  # 👈 Use Windows GitHub runner instead of Ubuntu
 
     steps:
       - name: 🛒 Checkout repository
@@ -21,10 +21,14 @@ jobs:
         with:
           node-version: 20
 
-      - name: 📦 Install dependencies and build
+      - name: 📦 Install dependencies and build (Windows environment)
+        shell: powershell
         run: |
+          Write-Host "📁 Moving into Next.js project folder..."
           cd my-app
+          Write-Host "📦 Installing dependencies..."
           npm ci
+          Write-Host "🏗️ Building Next.js app..."
           npm run build
 
       - name: 📤 Copy files to Windows Server
@@ -34,30 +38,43 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
-          # 👇 FIXED SOURCE PATH (add ./my-app/)
           source: "./my-app/*"
-          target: "${{ env.DEPLOY_PATH }}"
+          target: ${{ env.DEPLOY_PATH }}
 
-      - name: 🚀 Run app on Windows Server using PM2
+      - name: 🚀 Start app on Windows Server using PM2
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SERVER_IP }}
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
+          script_stop: true
           script: |
             powershell -NoProfile -NonInteractive -Command "
               Write-Host '--- Deploying Next.js app to Windows Server ---';
               $deploy = '${{ env.DEPLOY_PATH }}';
+
               if (!(Test-Path $deploy)) {
                 Write-Host 'Creating deployment folder...';
                 New-Item -ItemType Directory -Force -Path $deploy | Out-Null;
               }
+
               cd $deploy;
+
               Write-Host 'Installing production dependencies...';
               npm install --production;
-              Write-Host 'Starting app with PM2...';
-              pm2 restart sample -s || pm2 start npm --name 'sample' -- start;
+
+              Write-Host 'Ensuring PM2 is installed...';
+              if (-not (Get-Command pm2 -ErrorAction SilentlyContinue)) {
+                npm install -g pm2;
+              }
+
+              Write-Host 'Starting or restarting the app...';
+              pm2 restart sample -s -ErrorAction SilentlyContinue;
+              if ($LASTEXITCODE -ne 0) {
+                pm2 start npm --name 'sample' -- start;
+              }
+
               pm2 save;
               Write-Host '✅ Deployment complete!';
             "
