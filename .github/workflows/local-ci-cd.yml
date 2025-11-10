@@ -10,7 +10,7 @@ env:
 
 jobs:
   build_and_deploy:
-    runs-on: windows-latest  # 👈 Run the entire CI/CD pipeline in Windows
+    runs-on: windows-latest  # 👈 Use Windows runner
 
     steps:
       - name: 🛒 Checkout repository
@@ -21,24 +21,34 @@ jobs:
         with:
           node-version: 20
 
-      - name: 🧾 Debug folder structure
+      # ✅ DEBUG STEP — Verify folder structure
+      - name: 🧾 Verify current directory structure
         shell: powershell
         run: |
-          Write-Host "📍 Current directory: $(Get-Location)"
-          Write-Host "📂 Files at root:"
-          Get-ChildItem -Name
+          Write-Host "📍 Current directory:" (Get-Location)
+          Write-Host "📂 Listing all folders and files:"
+          Get-ChildItem -Recurse -Depth 2 | Select-Object FullName
 
       - name: 📦 Install dependencies and build (Windows)
         shell: powershell
         run: |
           Write-Host "📁 Moving into Next.js project folder..."
           cd my-app
+
+          if (!(Test-Path "package.json")) {
+            Write-Error "❌ package.json not found in $(Get-Location). Check your folder structure."
+            exit 1
+          }
+
           Write-Host "📦 Installing dependencies..."
           npm ci
+
           Write-Host "🧾 Checking available npm scripts..."
           npm run
+
           Write-Host "🏗️ Building Next.js app..."
           npm run build
+
           Write-Host "✅ Build completed successfully!"
 
       - name: 📤 Upload build to Windows Server
@@ -69,7 +79,6 @@ jobs:
                 New-Item -ItemType Directory -Force -Path $deploy | Out-Null;
               }
 
-              Write-Host '📁 Changing directory to deployment path...';
               cd $deploy;
 
               Write-Host '📦 Installing production dependencies...';
@@ -77,7 +86,6 @@ jobs:
 
               Write-Host '⚙️ Checking PM2 installation...';
               if (-not (Get-Command pm2 -ErrorAction SilentlyContinue)) {
-                Write-Host 'Installing PM2 globally...';
                 npm install -g pm2;
               }
 
