@@ -10,7 +10,7 @@ env:
 
 jobs:
   build_and_deploy:
-    runs-on: windows-latest  # 👈 Use Windows runner
+    runs-on: windows-latest  # 👈 Run on Windows
 
     steps:
       - name: 🛒 Checkout repository
@@ -21,19 +21,21 @@ jobs:
         with:
           node-version: 20
 
-      # ✅ DEBUG STEP — Verify folder structure
+      # ✅ Debug step to verify structure
       - name: 🧾 Verify current directory structure
         shell: powershell
         run: |
           Write-Host "📍 Current directory:" (Get-Location)
-          Write-Host "📂 Listing all folders and files:"
-          Get-ChildItem -Recurse -Depth 2 | Select-Object FullName
+          Write-Host "📂 Listing top-level folders:"
+          Get-ChildItem -Name
+          Write-Host "📁 Checking if SAMPLE/my-app/package.json exists:"
+          Test-Path "SAMPLE/my-app/package.json"
 
       - name: 📦 Install dependencies and build (Windows)
         shell: powershell
         run: |
-          Write-Host "📁 Moving into Next.js project folder..."
-          cd my-app
+          Write-Host "📁 Moving into correct project folder..."
+          cd SAMPLE/my-app
 
           if (!(Test-Path "package.json")) {
             Write-Error "❌ package.json not found in $(Get-Location). Check your folder structure."
@@ -58,7 +60,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
-          source: "./my-app/*"
+          source: "./SAMPLE/my-app/*"
           target: ${{ env.DEPLOY_PATH }}
 
       - name: 🚀 Start or Restart App on Windows Server
