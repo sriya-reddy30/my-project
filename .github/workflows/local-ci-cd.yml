@@ -13,46 +13,47 @@ jobs:
     runs-on: windows-latest
 
     steps:
-      - name: 🛒 Checkout repository
+      - name: Checkout repository
         uses: actions/checkout@v4
 
-      - name: ⚙️ Setup Node.js
+      - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
 
-      - name: 🧾 Verify current directory structure
+      # ✅ Debug: confirm correct paths
+      - name: Verify current directory structure
         shell: powershell
         run: |
-          Write-Host "📍 Current directory:" (Get-Location)
-          Write-Host "📂 Listing top-level folders:"
+          Write-Host "Current directory:" (Get-Location)
+          Write-Host "Listing top-level folders:"
           Get-ChildItem -Name
-          Write-Host "📁 Checking if SAMPLE/my-app/package.json exists:"
-          Test-Path 'SAMPLE/my-app/package.json'
+          Write-Host "Checking if SAMPLE\\my-app\\package.json exists:"
+          Test-Path 'SAMPLE\my-app\package.json'
 
-      - name: 📦 Install dependencies and build (Windows)
+      - name: Install dependencies and build (Windows)
         shell: powershell
         run: |
-          Write-Host "📁 Moving into correct project folder..."
+          Write-Host "Moving into correct project folder..."
           cd SAMPLE\my-app
 
           if (!(Test-Path "package.json")) {
-            Write-Error "❌ package.json not found in $(Get-Location). Check your folder structure."
+            Write-Error "package.json not found in $(Get-Location). Check your folder structure."
             exit 1
           }
 
-          Write-Host "📦 Installing dependencies..."
+          Write-Host "Installing dependencies..."
           npm ci
 
-          Write-Host "🧾 Checking available npm scripts..."
+          Write-Host "Checking available npm scripts..."
           npm run
 
-          Write-Host "🏗️ Building Next.js app..."
+          Write-Host "Building Next.js app..."
           npm run build
 
-          Write-Host "✅ Build completed successfully!"
+          Write-Host "Build completed successfully!"
 
-      - name: 📤 Upload build to Windows Server
+      - name: Upload build to Windows Server
         uses: appleboy/scp-action@v0.1.6
         with:
           host: ${{ secrets.SERVER_IP }}
@@ -62,7 +63,7 @@ jobs:
           source: "./SAMPLE/my-app/*"
           target: ${{ env.DEPLOY_PATH }}
 
-      - name: 🚀 Start or Restart App on Windows Server
+      - name: Start or Restart App on Windows Server
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SERVER_IP }}
@@ -72,30 +73,30 @@ jobs:
           script_stop: true
           script: |
             powershell -NoProfile -NonInteractive -Command "
-              Write-Host '--- 🚀 Starting Deployment on Windows Server ---';
+              Write-Host 'Starting deployment on Windows Server...';
               $deploy = '${{ env.DEPLOY_PATH }}';
 
               if (!(Test-Path $deploy)) {
-                Write-Host '📂 Creating deployment folder...';
+                Write-Host 'Creating deployment folder...';
                 New-Item -ItemType Directory -Force -Path $deploy | Out-Null;
               }
 
               cd $deploy;
 
-              Write-Host '📦 Installing production dependencies...';
+              Write-Host 'Installing production dependencies...';
               npm install --production;
 
-              Write-Host '⚙️ Checking PM2 installation...';
+              Write-Host 'Checking PM2 installation...';
               if (-not (Get-Command pm2 -ErrorAction SilentlyContinue)) {
                 npm install -g pm2;
               }
 
-              Write-Host '🚀 Starting or restarting the Next.js app...';
+              Write-Host 'Starting or restarting the Next.js app...';
               pm2 restart sample -s -ErrorAction SilentlyContinue;
               if ($LASTEXITCODE -ne 0) {
                 pm2 start npm --name 'sample' -- start;
               }
 
               pm2 save;
-              Write-Host '✅ Deployment complete and app is running!';
+              Write-Host 'Deployment complete and app is running!';
             "
