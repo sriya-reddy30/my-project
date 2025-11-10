@@ -21,21 +21,21 @@ jobs:
         with:
           node-version: 20
 
-      # ✅ Debug: confirm correct paths
+      # ✅ Confirm directory structure
       - name: Verify current directory structure
         shell: powershell
         run: |
           Write-Host "Current directory:" (Get-Location)
-          Write-Host "Listing top-level folders:"
+          Write-Host "Top-level folders:"
           Get-ChildItem -Name
-          Write-Host "Checking if SAMPLE\\my-app\\package.json exists:"
-          Test-Path 'SAMPLE\my-app\package.json'
+          Write-Host "Check if my-app/package.json exists:"
+          Test-Path 'my-app\package.json'
 
-      - name: Install dependencies and build (Windows)
+      - name: Install dependencies and build
         shell: powershell
         run: |
-          Write-Host "Moving into correct project folder..."
-          cd SAMPLE\my-app
+          Write-Host "Moving into project folder..."
+          cd my-app  # ✅ FIXED PATH
 
           if (!(Test-Path "package.json")) {
             Write-Error "package.json not found in $(Get-Location). Check your folder structure."
@@ -45,13 +45,10 @@ jobs:
           Write-Host "Installing dependencies..."
           npm ci
 
-          Write-Host "Checking available npm scripts..."
-          npm run
-
           Write-Host "Building Next.js app..."
           npm run build
 
-          Write-Host "Build completed successfully!"
+          Write-Host "✅ Build completed successfully!"
 
       - name: Upload build to Windows Server
         uses: appleboy/scp-action@v0.1.6
@@ -60,7 +57,7 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
-          source: "./SAMPLE/my-app/*"
+          source: "./my-app/*"   # ✅ FIXED PATH
           target: ${{ env.DEPLOY_PATH }}
 
       - name: Start or Restart App on Windows Server
@@ -98,5 +95,5 @@ jobs:
               }
 
               pm2 save;
-              Write-Host 'Deployment complete and app is running!';
+              Write-Host '✅ Deployment complete and app is running!';
             "
