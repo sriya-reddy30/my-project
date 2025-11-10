@@ -10,7 +10,7 @@ env:
 
 jobs:
   build_and_deploy:
-    runs-on: windows-latest  # 👈 Run on Windows
+    runs-on: windows-latest
 
     steps:
       - name: 🛒 Checkout repository
@@ -21,7 +21,6 @@ jobs:
         with:
           node-version: 20
 
-      # ✅ Debug step to verify structure
       - name: 🧾 Verify current directory structure
         shell: powershell
         run: |
@@ -29,13 +28,13 @@ jobs:
           Write-Host "📂 Listing top-level folders:"
           Get-ChildItem -Name
           Write-Host "📁 Checking if SAMPLE/my-app/package.json exists:"
-          Test-Path "SAMPLE/my-app/package.json"
+          Test-Path 'SAMPLE/my-app/package.json'
 
       - name: 📦 Install dependencies and build (Windows)
         shell: powershell
         run: |
           Write-Host "📁 Moving into correct project folder..."
-          cd SAMPLE/my-app
+          cd SAMPLE\my-app
 
           if (!(Test-Path "package.json")) {
             Write-Error "❌ package.json not found in $(Get-Location). Check your folder structure."
