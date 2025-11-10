@@ -1,4 +1,4 @@
-name: Deploy Next.js App to Windows Server (Windows Runner)
+name: Deploy Next.js App to Windows Server (Native PowerShell)
 
 on:
   push:
@@ -6,11 +6,11 @@ on:
   workflow_dispatch:
 
 env:
-  DEPLOY_PATH: "C:/deploy/sample"
+  DEPLOY_PATH: "C:\\deploy\\sample"
 
 jobs:
   build_and_deploy:
-    runs-on: windows-latest
+    runs-on: windows-latest  # ✅ Native Windows runner
 
     steps:
       - name: Checkout repository
@@ -21,79 +21,51 @@ jobs:
         with:
           node-version: 20
 
-      # ✅ Confirm directory structure
-      - name: Verify current directory structure
+      - name: Build Next.js app
         shell: powershell
         run: |
-          Write-Host "Current directory:" (Get-Location)
-          Write-Host "Top-level folders:"
-          Get-ChildItem -Name
-          Write-Host "Check if my-app/package.json exists:"
-          Test-Path 'my-app\package.json'
-
-      - name: Install dependencies and build
-        shell: powershell
-        run: |
-          Write-Host "Moving into project folder..."
-          cd my-app  # ✅ FIXED PATH
-
-          if (!(Test-Path "package.json")) {
-            Write-Error "package.json not found in $(Get-Location). Check your folder structure."
-            exit 1
-          }
-
-          Write-Host "Installing dependencies..."
+          Write-Host "Building project..."
+          cd my-app
           npm ci
-
-          Write-Host "Building Next.js app..."
           npm run build
+          Write-Host "✅ Build completed."
 
-          Write-Host "✅ Build completed successfully!"
+      - name: Deploy build to Windows Server (PowerShell)
+        shell: powershell
+        run: |
+          $server = "${{ secrets.SERVER_IP }}"
+          $username = "${{ secrets.SERVER_USER }}"
+          $password = "${{ secrets.SERVER_PASSWORD }}" | ConvertTo-SecureString -AsPlainText -Force
+          $cred = New-Object System.Management.Automation.PSCredential($username, $password)
+          $session = New-PSSession -ComputerName $server -Credential $cred -Authentication Basic
 
-      - name: Upload build to Windows Server
-        uses: appleboy/scp-action@v0.1.6
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ${{ secrets.SERVER_USER }}
-          password: ${{ secrets.SERVER_PASSWORD }}
-          port: 22
-          source: "./my-app/*"   # ✅ FIXED PATH
-          target: ${{ env.DEPLOY_PATH }}
+          $deployPath = "${{ env.DEPLOY_PATH }}"
 
-      - name: Start or Restart App on Windows Server
-        uses: appleboy/ssh-action@v0.1.10
-        with:
-          host: ${{ secrets.SERVER_IP }}
-          username: ${{ secrets.SERVER_USER }}
-          password: ${{ secrets.SERVER_PASSWORD }}
-          port: 22
-          script_stop: true
-          script: |
-            powershell -NoProfile -NonInteractive -Command "
-              Write-Host 'Starting deployment on Windows Server...';
-              $deploy = '${{ env.DEPLOY_PATH }}';
+          Write-Host "Creating deploy folder if missing..."
+          Invoke-Command -Session $session -ScriptBlock {
+            param($deployPath)
+            if (!(Test-Path $deployPath)) {
+              New-Item -ItemType Directory -Path $deployPath | Out-Null
+            }
+          } -ArgumentList $deployPath
 
-              if (!(Test-Path $deploy)) {
-                Write-Host 'Creating deployment folder...';
-                New-Item -ItemType Directory -Force -Path $deploy | Out-Null;
-              }
+          Write-Host "Copying files..."
+          Copy-Item -Path "my-app\\*" -Destination "\\$server\C$\deploy\sample" -Recurse -Force
 
-              cd $deploy;
+          Write-Host "Installing dependencies & restarting app remotely..."
+          Invoke-Command -Session $session -ScriptBlock {
+            param($deployPath)
+            cd $deployPath
+            if (!(Get-Command pm2 -ErrorAction SilentlyContinue)) {
+              npm install -g pm2
+            }
+            npm install --production
+            pm2 restart sample -s -ErrorAction SilentlyContinue
+            if ($LASTEXITCODE -ne 0) {
+              pm2 start npm --name 'sample' -- start
+            }
+            pm2 save
+          } -ArgumentList $deployPath
 
-              Write-Host 'Installing production dependencies...';
-              npm install --production;
-
-              Write-Host 'Checking PM2 installation...';
-              if (-not (Get-Command pm2 -ErrorAction SilentlyContinue)) {
-                npm install -g pm2;
-              }
-
-              Write-Host 'Starting or restarting the Next.js app...';
-              pm2 restart sample -s -ErrorAction SilentlyContinue;
-              if ($LASTEXITCODE -ne 0) {
-                pm2 start npm --name 'sample' -- start;
-              }
-
-              pm2 save;
-              Write-Host '✅ Deployment complete and app is running!';
-            "
+          Write-Host "✅ Deployment complete!"
+          Remove-PSSession $session
