@@ -23,7 +23,7 @@ jobs:
 
       - name: 📦 Install dependencies and build
         run: |
-          cd sample
+          cd my-app
           npm ci
           npm run build
 
