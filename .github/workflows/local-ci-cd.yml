@@ -34,8 +34,9 @@ jobs:
           username: ${{ secrets.SERVER_USER }}
           password: ${{ secrets.SERVER_PASSWORD }}
           port: 22
-          source: "sample/*"
-          target: "${{ env.DEPLOY_PATH }}" 
+          # 👇 FIXED SOURCE PATH (add ./my-app/)
+          source: "./my-app/*"
+          target: "${{ env.DEPLOY_PATH }}"
 
       - name: 🚀 Run app on Windows Server using PM2
         uses: appleboy/ssh-action@v0.1.10
@@ -46,26 +47,17 @@ jobs:
           port: 22
           script: |
             powershell -NoProfile -NonInteractive -Command "
-              Write-Host '--- Connecting to server and preparing deployment ---';
+              Write-Host '--- Deploying Next.js app to Windows Server ---';
               $deploy = '${{ env.DEPLOY_PATH }}';
-
               if (!(Test-Path $deploy)) {
                 Write-Host 'Creating deployment folder...';
                 New-Item -ItemType Directory -Force -Path $deploy | Out-Null;
               }
-
               cd $deploy;
               Write-Host 'Installing production dependencies...';
               npm install --production;
-
-              Write-Host 'Building Next.js app...';
-              npm run build;
-
               Write-Host 'Starting app with PM2...';
               pm2 restart sample -s || pm2 start npm --name 'sample' -- start;
-
-              Write-Host 'Saving PM2 process list...';
               pm2 save;
-
               Write-Host '✅ Deployment complete!';
             "
