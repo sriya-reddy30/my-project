@@ -10,7 +10,7 @@ env:
 
 jobs:
   build_and_deploy:
-    runs-on: windows-latest  # 👈 Use Windows GitHub runner instead of Ubuntu
+    runs-on: windows-latest  # 👈 Run the entire CI/CD pipeline in Windows
 
     steps:
       - name: 🛒 Checkout repository
@@ -21,17 +21,27 @@ jobs:
         with:
           node-version: 20
 
-      - name: 📦 Install dependencies and build (Windows environment)
+      - name: 🧾 Debug folder structure
+        shell: powershell
+        run: |
+          Write-Host "📍 Current directory: $(Get-Location)"
+          Write-Host "📂 Files at root:"
+          Get-ChildItem -Name
+
+      - name: 📦 Install dependencies and build (Windows)
         shell: powershell
         run: |
           Write-Host "📁 Moving into Next.js project folder..."
           cd my-app
           Write-Host "📦 Installing dependencies..."
           npm ci
+          Write-Host "🧾 Checking available npm scripts..."
+          npm run
           Write-Host "🏗️ Building Next.js app..."
           npm run build
+          Write-Host "✅ Build completed successfully!"
 
-      - name: 📤 Copy files to Windows Server
+      - name: 📤 Upload build to Windows Server
         uses: appleboy/scp-action@v0.1.6
         with:
           host: ${{ secrets.SERVER_IP }}
@@ -41,7 +51,7 @@ jobs:
           source: "./my-app/*"
           target: ${{ env.DEPLOY_PATH }}
 
-      - name: 🚀 Start app on Windows Server using PM2
+      - name: 🚀 Start or Restart App on Windows Server
         uses: appleboy/ssh-action@v0.1.10
         with:
           host: ${{ secrets.SERVER_IP }}
@@ -51,30 +61,32 @@ jobs:
           script_stop: true
           script: |
             powershell -NoProfile -NonInteractive -Command "
-              Write-Host '--- Deploying Next.js app to Windows Server ---';
+              Write-Host '--- 🚀 Starting Deployment on Windows Server ---';
               $deploy = '${{ env.DEPLOY_PATH }}';
 
               if (!(Test-Path $deploy)) {
-                Write-Host 'Creating deployment folder...';
+                Write-Host '📂 Creating deployment folder...';
                 New-Item -ItemType Directory -Force -Path $deploy | Out-Null;
               }
 
+              Write-Host '📁 Changing directory to deployment path...';
               cd $deploy;
 
-              Write-Host 'Installing production dependencies...';
+              Write-Host '📦 Installing production dependencies...';
               npm install --production;
 
-              Write-Host 'Ensuring PM2 is installed...';
+              Write-Host '⚙️ Checking PM2 installation...';
               if (-not (Get-Command pm2 -ErrorAction SilentlyContinue)) {
+                Write-Host 'Installing PM2 globally...';
                 npm install -g pm2;
               }
 
-              Write-Host 'Starting or restarting the app...';
+              Write-Host '🚀 Starting or restarting the Next.js app...';
               pm2 restart sample -s -ErrorAction SilentlyContinue;
               if ($LASTEXITCODE -ne 0) {
                 pm2 start npm --name 'sample' -- start;
               }
 
               pm2 save;
-              Write-Host '✅ Deployment complete!';
+              Write-Host '✅ Deployment complete and app is running!';
             "
