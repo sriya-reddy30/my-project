@@ -1,80 +1,71 @@
-name: Local Test - CI/CD Next.js
+name: Deploy Next.js App to Windows Server
 
 on:
   push:
     branches: ["main"]
   workflow_dispatch:
-  schedule:
-    - cron: "0 2 * * *" # Runs every night at 2 AM UTC
+
+env:
+  DEPLOY_PATH: ${{ secrets.DEPLOY_PATH || 'C:/deploy/sample' }}
 
 jobs:
-  build-and-test-deploy:
-    name: Build → Test → Deploy → Run
+  build_and_deploy:
     runs-on: ubuntu-latest
-    defaults:
-      run:
-        working-directory: ./my-app
 
     steps:
       - name: 🛒 Checkout repository
         uses: actions/checkout@v4
 
-      - name: ⚙️ Set up Node.js
+      - name: ⚙️ Setup Node.js
         uses: actions/setup-node@v4
         with:
           node-version: 20
-          cache: 'npm'
-          cache-dependency-path: my-app/package-lock.json
 
-      - name: 📦 Install dependencies
-        run: npm ci
-
-      - name: 🏗️ Build Next.js app
-        run: npm run build
-
-      - name: 🔍 Verify build output
+      - name: 📦 Install dependencies and build
         run: |
-          echo "📍 Current directory: $(pwd)"
-          if [ -d ".next" ]; then
-            echo "✅ .next directory found!"
-            ls -la .next
-          else
-            echo "❌ .next directory not found!"
-            exit 1
-          fi
+          cd sample
+          npm ci
+          npm run build
 
-      - name: 🗜️ Compress .next folder
-        run: |
-          tar -czf next-build.tar.gz .next
-          echo "✅ Created archive:"
-          ls -lh next-build.tar.gz
-
-      - name: 🚀 Upload build artifact
-        uses: actions/upload-artifact@v4
+      - name: 📤 Copy files to Windows Server
+        uses: appleboy/scp-action@v0.1.6
         with:
-          name: next-build
-          path: my-app/next-build.tar.gz
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          source: "sample/*"
+          target: "${{ env.DEPLOY_PATH }}" 
 
-      - name: 📦 Simulate "Deploy" locally
-        run: |
-          mkdir -p ../deploy_output
-          cp next-build.tar.gz ../deploy_output/
-          cd ../deploy_output
-          tar -xzf next-build.tar.gz
-          echo "✅ Simulated deployment complete:"
-          ls -la .next
+      - name: 🚀 Run app on Windows Server using PM2
+        uses: appleboy/ssh-action@v0.1.10
+        with:
+          host: ${{ secrets.SERVER_IP }}
+          username: ${{ secrets.SERVER_USER }}
+          password: ${{ secrets.SERVER_PASSWORD }}
+          port: 22
+          script: |
+            powershell -NoProfile -NonInteractive -Command "
+              Write-Host '--- Connecting to server and preparing deployment ---';
+              $deploy = '${{ env.DEPLOY_PATH }}';
 
-      - name: 🏃 Run Application Automatically
-        run: |
-          echo "🚀 Starting Next.js app..."
-          npm install --production
-          nohup npm start > app.log 2>&1 &
-          sleep 5
-          echo "✅ Application started successfully."
-          echo "Checking if server is responding on port 3000..."
-          curl -I http://localhost:3000 || echo "ℹ️ Server not reachable in CI environment (expected for simulation)."
+              if (!(Test-Path $deploy)) {
+                Write-Host 'Creating deployment folder...';
+                New-Item -ItemType Directory -Force -Path $deploy | Out-Null;
+              }
 
-      - name: ✅ Verify simulated deployment
-        run: |
-          echo "🎯 App successfully built, deployed, and started automatically!"
-          ls -la ../deploy_output/.next
+              cd $deploy;
+              Write-Host 'Installing production dependencies...';
+              npm install --production;
+
+              Write-Host 'Building Next.js app...';
+              npm run build;
+
+              Write-Host 'Starting app with PM2...';
+              pm2 restart sample -s || pm2 start npm --name 'sample' -- start;
+
+              Write-Host 'Saving PM2 process list...';
+              pm2 save;
+
+              Write-Host '✅ Deployment complete!';
+            "
